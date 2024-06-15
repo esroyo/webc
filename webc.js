@@ -183,7 +183,7 @@ class WebC {
 	}
 
 	static isComponentFilePath(glob) {
-    return fastglob.isDynamicPattern(glob)
+    return glob.includes('*')
 	    || glob.slice(-5) === ".webc";
   }
 
