@@ -90,25 +90,30 @@ class WebC {
 	}
 
 	static async getASTFromString(string) {
-		let wc = new WebC({
-			input: string
-		});
-		let { content } = wc.getContent();
-		return wc.getAST(content);
+		return (await WebC.getFromString(string)).ast;
 	}
 
 	// @deprecated for getFromFilePath
 	static async getASTFromFilePath(filePath) {
-		let wc = new WebC({
-			file: filePath
-		});
-		let { content } = wc.getContent();
-		return wc.getAST(content);
+		return (await WebC.getFromFilePath(filePath)).ast;
 	}
 
 	static async getFromFilePath(filePath) {
 		let wc = new WebC({
 			file: filePath
+		});
+		let { content, mode } = wc.getContent();
+
+		return {
+			content,
+			ast: await wc.getAST(content),
+			mode,
+		};
+	}
+
+	static async getFromString(string) {
+		let wc = new WebC({
+			input: string
 		});
 		let { content, mode } = wc.getContent();
 
@@ -157,6 +162,18 @@ class WebC {
 		}
 	}
 
+	_filterComponentsObjectByFilePath(obj = {}) {
+		return obj && this._filterComponentsObjectBy(obj, WebC.isComponentFilePath);
+	}
+
+	_filterComponentsObjectByInput(obj = {}) {
+    return obj && this._filterComponentsObjectBy(obj, (v) => !WebC.isComponentFilePath(v));
+	}
+
+	_filterComponentsObjectBy(obj, predicate) {
+    return Object.fromEntries(Object.entries(obj).filter((pair) => predicate(pair[1])));
+	}
+
 	static findGlob(glob, ignores = []) {
 		return fastglob.sync(glob, {
 			ignore: ignores,
@@ -164,6 +181,11 @@ class WebC {
 			dot: false,
 		});
 	}
+
+	static isComponentFilePath(glob) {
+    return fastglob.isDynamicPattern(glob)
+	    || glob.slice(-5) === ".webc";
+  }
 
 	static getComponentsMap(globOrObject, ignores) {
 		let rawFiles = globOrObject;
@@ -247,8 +269,10 @@ class WebC {
 			ast.setHelper(name, this.customScopedHelpers[name], true);
 		}
 
-		await ast.setComponentsByFilePath(this.globalComponents);
-		await ast.setComponentsByFilePath(options.components);
+		await ast.setComponentsByFilePath(this._filterComponentsObjectByFilePath(this.globalComponents));
+		await ast.setComponentsByFilePath(this._filterComponentsObjectByFilePath(options.components));
+		await ast.setComponentsByInput(this._filterComponentsObjectByInput(this.globalComponents));
+		await ast.setComponentsByInput(this._filterComponentsObjectByInput(options.components));
 
 		return {
 			ast: rawAst,

@@ -83,7 +83,7 @@ class AstSerializer {
 		});
 
 		// Component cache
-		this.componentMapNameToFilePath = {};
+		this.componentMapNameToFilePathOrInput = {};
 
 		this.streams = new Streams(["html", "css", "js"]);
 
@@ -303,18 +303,22 @@ class AstSerializer {
 		return this.componentManager.parse(filePath, this.mode, this.dataCascade, ast, content);
 	}
 
+	async preparseComponentByInput(input) {
+		return this.componentManager.parseInput(input, this.mode, this.dataCascade);
+	}
+
 	getComponentFilePath(name) {
-		return this.componentMapNameToFilePath[name];
+		return this.componentMapNameToFilePathOrInput[name];
 	}
 
 	// synchronous (components should already be cached)
 	getComponent(name, options) {
-		if(!name || !this.componentMapNameToFilePath[name]) {
+		let filePath = this.getComponentFilePath(name);
+
+		if(!name || !filePath) {
 			// render as a plain-ol-tag
 			return false;
 		}
-
-		let filePath = this.getComponentFilePath(name);
 
 		// is a circular dependency, render as a plain-ol-tag
 		if(this.isCircularDependency(filePath, options)) {
@@ -332,9 +336,21 @@ class AstSerializer {
 		let promises = [];
 		for(let name in components) {
 			let filePath = components[name];
-			this.componentMapNameToFilePath[name] = Path.normalizePath(filePath);
+			this.componentMapNameToFilePathOrInput[name] = Path.normalizePath(filePath);
 
-			promises.push(this.preparseComponentByFilePath(this.componentMapNameToFilePath[name]));
+			promises.push(this.preparseComponentByFilePath(this.componentMapNameToFilePathOrInput[name]));
+		}
+
+		await Promise.all(promises);
+	}
+
+	// `components` object maps from component name => component input
+	async setComponentsByInput(components = {}) {
+		let promises = [];
+		for(let name in components) {
+			this.componentMapNameToFilePathOrInput[name] = components[name];
+
+			promises.push(this.preparseComponentByInput(this.componentMapNameToFilePathOrInput[name]));
 		}
 
 		await Promise.all(promises);
@@ -717,7 +733,8 @@ class AstSerializer {
 	}
 
 	addComponentDependency(component, tagName, options) {
-		let componentFilePath = Path.normalizePath(component.filePath);
+    let componentFilePath = component.filePath.startsWith(AstSerializer.FAKE_FS_PATH)
+			? component.filePath : Path.normalizePath(component.filePath);
 		if(!options.components.hasNode(componentFilePath)) {
 			options.components.addNode(componentFilePath);
 		}
@@ -731,7 +748,7 @@ class AstSerializer {
 		}
 
 		// reset for next time
-		options.closestParentComponent = Path.normalizePath(componentFilePath);
+		options.closestParentComponent = componentFilePath;
 	}
 
 	getAggregateAssetKey(tagName, node, options) {
@@ -1325,7 +1342,7 @@ class AstSerializer {
 
 			let returnObject = {
 				html: content,
-				components: assets.orderedComponentList.filter(entry => entry !== AstSerializer.FAKE_FS_PATH),
+				components: assets.orderedComponentList.filter(entry => !entry.startsWith(AstSerializer.FAKE_FS_PATH)),
 				css: [],
 				js: [],
 				buckets: {},

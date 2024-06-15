@@ -145,6 +145,8 @@ class ComponentManager {
 			// `base64url` is not available on StackBlitz
 			return this.getDigest(hash);
 		}
+
+		hash.end();
 	}
 
 	/* Careful, this one mutates */
@@ -228,6 +230,71 @@ class ComponentManager {
 
 		this.components[filePath] = {
 			filePath,
+			ast,
+			content,
+			get newLineStartIndeces() {
+				if(!this._lineStarts) {
+					this._lineStarts = ComponentManager.getNewLineStartIndeces(content);
+				}
+				return this._lineStarts;
+			},
+
+			mode,
+			isTopLevelComponent,
+			hasDeclarativeShadowDom,
+			ignoreRootTag,
+			scopedStyleHash,
+			rootAttributeMode,
+			rootAttributes: AstQuery.getRootAttributes(ast, scopedStyleHash),
+			slotTargets: slotTargets,
+			setupScript,
+		};
+
+		parsingResolve();
+	}
+
+	async parseInput(input, mode, dataCascade) {
+		if(this.components[input]) {
+			// already parsed
+			return;
+		}
+
+		// parsing in progress
+		if(this.parsingPromises[input]) {
+			return this.parsingPromises[input];
+		}
+
+		let parsingResolve;
+		this.parsingPromises[input] = new Promise((resolve) => {
+			parsingResolve = resolve;
+		});
+
+		const isTopLevelComponent = false;
+		const parsed = await WebC.getFromString(input);
+		const ast = parsed.ast;
+		const content = parsed.content;
+		mode = parsed.mode;
+
+		const scopedStyleHash = this.getScopedStyleHash(ast, input);
+		// only executes once per component
+		const setupScript = await this.getSetupScriptValue(ast, input, dataCascade);
+		const hasDeclarativeShadowDom = AstQuery.hasDeclarativeShadowDomChild(ast);
+
+		const topLevelNodes = AstQuery.getTopLevelNodes(ast);
+
+		// important for ignoreComponentParentTag, issue #135
+		for(const node of topLevelNodes) {
+			ComponentManager.addImpliedWebCAttributes(node);
+		}
+
+	  const rootAttributeMode = this.getRootMode(topLevelNodes);
+		const ignoreRootTag = this.ignoreComponentParentTag(topLevelNodes, rootAttributeMode, hasDeclarativeShadowDom);
+		const slotTargets = AstQuery.getSlotTargets(ast);
+
+		let hash = createHash("sha256");
+		hash.update(input);
+		this.components[input] = {
+			filePath: AstSerializer.FAKE_FS_PATH + '_' + this.getDigest(hash),
 			ast,
 			content,
 			get newLineStartIndeces() {
