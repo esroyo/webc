@@ -50,16 +50,17 @@ test("Uses a global component (registered explicitly with Array)", async t => {
 
 test("Uses a global component (registered explicitly with the contents of the component)", async t => {
 	let component = new WebC();
-	component.setContent(`<my-custom-element></my-custom-element>`);
+  component.setContent(`<my-layout><my-custom-element></my-custom-element></my-layout>`);
 
 	component.defineComponents({
 		"my-custom-element": "<my-span>This is a global component.</my-span>",
 		"my-span": "<span><slot></slot></span>",
+    "my-layout": "<!doctype html><html><head><title>foo</title></head><body><slot></slot></body></html>",
 	});
 
 	let { html, css, js, components } = await component.compile();
 
-  t.is(html, `<span>This is a global component.</span>`);
+  t.is(html.split("\n").join(""), `<!doctype html><html><head><title>foo</title></head><body><span>This is a global component.</span></body></html>`);
 
 	t.deepEqual(js, []);
 	t.deepEqual(css, []);

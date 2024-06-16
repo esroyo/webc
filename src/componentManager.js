@@ -175,11 +175,12 @@ class ComponentManager {
 	}
 
 	has(filePath) {
-		return filePath in this.components;
+	  return !!this.get(filePath);
 	}
 
 	get(filePath) {
-		return this.components[filePath];
+    return this.components[filePath]
+      || Object.values(this.components).find((component) => component.filePath === filePath);
 	}
 
 	async parse(filePath, mode, dataCascade, ast, content) {

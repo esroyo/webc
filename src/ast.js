@@ -281,7 +281,7 @@ class AstSerializer {
 			return true;
 		}
 
-		if(renderingMode === "component") {
+    if(renderingMode === "component") {
 			if(tagName === "head" || tagName === "body" || tagName === "html") {
 				return true;
 			}
